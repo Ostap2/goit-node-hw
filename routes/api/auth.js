@@ -1,13 +1,11 @@
 const express = require("express");
-const controller = require("../../controller/auth");
-const { validateBody, authenticate } = require("../../middlewares");
-const { schemas } = require("../../models/user");
-const { controllerWrapper } = require("../../erorr");
-const multer = require("multer");
 
-const upload = multer({ dest: "tmp/" });
+const controller = require("../../controller/auth");
 
 const router = express.Router();
+
+const { validateBody, authenticate, load } = require("../../middlewares");
+const { schemas } = require("../../models/user");
 
 router.post("/register", validateBody(schemas.registerSchema), controller.register);
 
@@ -20,7 +18,7 @@ router.post("/logout", authenticate, controller.logout);
 router.patch(
   "/avatars",
   authenticate,
-  upload.single("avatar"),
+  load.single("avatar"),
   controller.updateAvatar
 );
 

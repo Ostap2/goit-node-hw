@@ -1,54 +1,53 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const gravatar = require("gravatar");
-const multer = require("multer");
-const jimp = require("jimp");
 const path = require("path");
-const { promisify } = require("util");
+const { promises: fs } = require("fs");
+const Jimp = require("jimp");
 
 const { SECRET_KEY } = process.env;
-const { controllerWrapper, HttpError } = require("../erorr");
+
+const { HttpError, controllerWrapper } = require("../erorr");
 const { User } = require("../models/user");
 
-const upload = multer({ dest: "tmp/" });
+const avatarsDir = path.join(__dirname, "../", "public", "avatars");
 
-const register = async (req, res) => {
+const promisifiedRename = fs.rename;
+
+const register = controllerWrapper(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
+
   if (user) {
     throw HttpError(409, "Email in use");
   }
 
   const hashPassword = await bcrypt.hash(password, 10);
+  const avatarURL = gravatar.url(email);
 
-  const avatarURL = gravatar.url(email, { s: "250", r: "pg", d: "identicon" });
-  const newUser = await User.create({ ...req.body, password: hashPassword, avatarURL });
+  const newUser = await User.create({
+    ...req.body,
+    password: hashPassword,
+    avatarURL,
+  });
 
   res.status(201).json({
     user: {
       email: newUser.email,
       subscription: newUser.subscription,
-      avatarURL: newUser.avatarURL,
     },
   });
-};
+});
 
-const login = async (req, res) => {
+const login = controllerWrapper(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
-  if (!user) {
+
+  if (!user || !(await bcrypt.compare(password, user.password))) {
     throw HttpError(401, "Email or password is wrong");
   }
 
-  const passwordCompare = await bcrypt.compare(password, user.password);
-  if (!passwordCompare) {
-    throw HttpError(401, "Email or password is wrong");
-  }
-
-  const payload = {
-    id: user._id,
-  };
-
+  const payload = { id: user._id };
   const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "23h" });
   await User.findByIdAndUpdate(user._id, { token });
 
@@ -57,44 +56,50 @@ const login = async (req, res) => {
     user: {
       email: user.email,
       subscription: user.subscription,
-      avatarURL: user.avatarURL,
     },
   });
-};
+});
 
 const current = (req, res) => {
-  const { email, subscription, avatarURL } = req.user;
+  const { email, subscription } = req.user;
 
   res.json({
     email,
     subscription,
-    avatarURL,
   });
 };
 
-const logout = async (req, res) => {
+const logout = controllerWrapper(async (req, res) => {
   const { _id } = req.user;
   await User.findByIdAndUpdate(_id, { token: "" });
 
   res.status(204).json();
-};
+});
 
-const updateAvatar = async (req, res) => {
-  const { path: tmpPath, originalname } = req.file;
-  const image = await jimp.read(tmpPath);
-  await image.cover(250, 250).writeAsync(tmpPath);
-  const uniqueAvatarName = `${req.user._id}-${Date.now()}-${originalname}`;
-  const avatarPath = path.join(__dirname, '../public/avatars', uniqueAvatarName);
-  await promisify(require('fs').rename)(tmpPath, avatarPath);
-  const avatarURL = `/avatars/${uniqueAvatarName}`;
-  await User.findByIdAndUpdate(req.user._id, { avatarURL });
-  res.json({ avatarURL });
-};
+const updateAvatar = controllerWrapper(async (req, res) => {
+  const { _id } = req.user;
+  const { path: tempUpload, originalname } = req.file;
+
+  const filename = `${_id}_${originalname}`;
+  const resultUpload = path.join(avatarsDir, filename);
+
+  await promisifiedRename(tempUpload, resultUpload);
+
+  const avatarJimp = await Jimp.read(resultUpload);
+  avatarJimp.resize(250, 250).write(resultUpload);
+
+  const avatarURL = path.join("avatars", filename);
+  await User.findByIdAndUpdate(_id, { avatarURL });
+
+  res.json({
+    avatarURL,
+  });
+});
 
 module.exports = {
-  register: controllerWrapper(register),
-  login: controllerWrapper(login),
+  register,
+  login,
   current: controllerWrapper(current),
-  logout: controllerWrapper(logout),
-  updateAvatar: controllerWrapper(updateAvatar),
+  logout,
+  updateAvatar,
 };
