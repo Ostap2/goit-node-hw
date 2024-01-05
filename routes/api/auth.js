@@ -1,13 +1,11 @@
 const express = require("express");
-const controller = require("../../controller/auth");
-const { validateBody, authenticate } = require("../../middlewares");
-const { schemas } = require("../../models/user");
-const { controllerWrapper } = require("../../erorr");
-const multer = require("multer");
 
-const upload = multer({ dest: "tmp/" });
+const controller = require("../../controller/auth");
 
 const router = express.Router();
+
+const { validateBody, authenticate, upload } = require("../../middlewares");
+const { schemas } = require("../../models/user");
 
 router.post("/register", validateBody(schemas.registerSchema), controller.register);
 
