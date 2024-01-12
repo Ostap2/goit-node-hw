@@ -7,7 +7,7 @@ const validateBody = (schema) => {
       next();
     } catch (error) {
       if (error.isJoi) {
-        const errorMessage = error.details.map((detail) => detail.message).join(", ");
+        const errorMessage = error.details.map((detail) => detail.message).join("-");
         next(HttpError(400, errorMessage));
       } else {
         next(error);

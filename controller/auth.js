@@ -77,6 +77,7 @@ const logout = controllerWrapper(async (req, res) => {
 });
 
 const updateAvatar = controllerWrapper(async (req, res) => {
+  if(!req.file) { res.status(400).json({message: 'No file uploaded'}) }
   const { _id } = req.user;
   const { path: tempUpload, originalname } = req.file;
 
