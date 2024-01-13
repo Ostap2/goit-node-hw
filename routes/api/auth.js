@@ -15,7 +15,7 @@ router.patch(
   controller.updateAvatar
 );
 
-// Додаємо нові роути для верифікації емейла і ресенду верифікації
+
 router.get("/verify/:verificationToken", controller.verifyEmail);
 router.post("/verify", validateBody(schemas.resendVerificationSchema), controller.resendVerification);
 
