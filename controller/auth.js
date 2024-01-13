@@ -54,6 +54,10 @@ const login = controllerWrapper(async (req, res) => {
     throw HttpError(401, "Email or password is wrong");
   }
 
+  if (!user.verify) {
+    throw HttpError(403, "Email is not verified");
+  }
+
   const payload = { id: user._id };
   const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "23h" });
   await User.findByIdAndUpdate(user._id, { token });
@@ -66,6 +70,7 @@ const login = controllerWrapper(async (req, res) => {
     },
   });
 });
+
 
 const current = (req, res) => {
   const { email, subscription } = req.user;
@@ -121,6 +126,29 @@ const verifyEmail = controllerWrapper(async (req, res) => {
 
   res.status(200).json({ message: 'Verification successful' });
 });
+const resendVerification = controllerWrapper(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    throw HttpError(404, 'User not found');
+  }
+
+  if (user.verify) {
+    throw HttpError(400, 'Verification has already been passed');
+  }
+
+  // Генеруємо новий токен для повторної відправки
+  const newVerificationToken = uuid.v4();
+  await User.findByIdAndUpdate(user._id, { verificationToken: newVerificationToken });
+
+  // Відправляємо новий токен на емейл
+  await sendVerificationEmail(email, newVerificationToken);
+
+  res.status(200).json({ message: 'Verification email sent' });
+});
+
 
 module.exports = {
   register,
@@ -129,4 +157,5 @@ module.exports = {
   logout,
   updateAvatar,
   verifyEmail,
+  resendVerification,
 };
