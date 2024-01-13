@@ -4,11 +4,14 @@ const gravatar = require("gravatar");
 const path = require("path");
 const { promises: fs } = require("fs");
 const Jimp = require("jimp");
+const uuid = require("uuid");
 
 const { SECRET_KEY } = process.env;
 
 const { HttpError, controllerWrapper } = require("../erorr");
 const { User } = require("../models/user");
+
+const { sendVerificationEmail } = require('../utils/sendEmail');
 
 const avatarsDir = path.join(__dirname, "../", "public", "avatars");
 
@@ -25,16 +28,20 @@ const register = controllerWrapper(async (req, res) => {
   const hashPassword = await bcrypt.hash(password, 10);
   const avatarURL = gravatar.url(email);
 
-  const newUser = await User.create({
+  const verificationToken = uuid.v4();
+  await User.create({
     ...req.body,
     password: hashPassword,
     avatarURL,
+    verificationToken,
   });
+
+  await sendVerificationEmail(email, verificationToken);
 
   res.status(201).json({
     user: {
-      email: newUser.email,
-      subscription: newUser.subscription,
+      email,
+      subscription: req.body.subscription || "starter",
     },
   });
 });
@@ -97,10 +104,29 @@ const updateAvatar = controllerWrapper(async (req, res) => {
   });
 });
 
+const verifyEmail = controllerWrapper(async (req, res) => {
+  const { verificationToken } = req.params;
+
+  const user = await User.findOne({ verificationToken });
+
+  if (!user) {
+    throw HttpError(404, 'User not found');
+  }
+
+  if (user.verify) {
+    throw HttpError(400, 'Email has already been verified');
+  }
+
+  await User.findByIdAndUpdate(user._id, { verify: true, verificationToken: null });
+
+  res.status(200).json({ message: 'Verification successful' });
+});
+
 module.exports = {
   register,
   login,
   current: controllerWrapper(current),
   logout,
   updateAvatar,
+  verifyEmail,
 };
